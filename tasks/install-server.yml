@@ -1,0 +1,120 @@
+#
+# Zabbix Server Installation
+#
+
+- name: 'Install deb from {{ zabbix_deb_url }}'
+  apt:
+    deb: "{{ zabbix_deb_url }}"
+  tags:
+    - install-server
+    - install-server-install
+
+- name: Install Zabbix Server packages
+  apt:
+    pkg:
+      - zabbix-server-mysql
+      - zabbix-frontend-php
+      - zabbix-apache-conf
+      - zabbix-agent
+      - default-mysql-client
+      - python3-mysqldb
+    update_cache: yes
+  tags:
+    - install-server
+    - install-server-install
+
+- include_vars: credentials.yml
+  ignore_errors: yes
+
+- name: Create database
+  mysql_db:
+    name: "{{ dbname }}"
+    encoding: utf8
+    collation: utf8_bin
+    state: present
+  register: db_created
+  tags:
+    - install-server
+    - install-server-install
+
+- name: Create dbuser and grant privileges
+  mysql_user:
+    name: '{{ dbuser }}'
+    host: localhost
+    password: '{{ dbpass }}'
+    priv: '{{ dbname }}.*:ALL,GRANT'
+    state: present
+  tags:
+    - install-server
+    - install-server-install
+
+- name: Import database skeleton
+  mysql_db:
+    state: import
+    name: '{{ dbname }}'
+    target: '{{ dbdata_dumpfile }}'
+  when: db_created.changed
+  tags:
+    - install-server
+    - install-server-install
+
+- name: Configure Zabbix Server
+  lineinfile:
+    dest: "{{ item.configfile }}"
+    regexp: "^{{ item.param }}"
+    insertafter: "^# {{ item.param }}=$"
+    line: "{{ item.param }}={{ item.value }}"
+  with_items:
+    - {configfile: "/etc/zabbix/zabbix_server.conf", param: "DBName", value: "{{ dbname }}"}
+    - {configfile: "/etc/zabbix/zabbix_server.conf", param: "DBUser", value: "{{ dbuser }}"}
+    - {configfile: "/etc/zabbix/zabbix_server.conf", param: "DBPassword", value: "{{ dbpass }}"}
+    - {configfile: "/etc/zabbix/zabbix_agentd.conf", param: "Hostname", value: "{{ inventory_hostname }}"}
+  tags:
+    - install-server
+    - install-server-configure
+
+- name: Set php timezone
+  replace:
+    path: /etc/zabbix/apache.conf
+    regexp: '(#\s*)?php_value date.timezone .*$'
+    replace: 'php_value date.timezone {{ timezone }}'
+  tags:
+    - install-server
+    - install-server-configure
+
+- name: Configure Zabbix Frontend
+  template:
+    src: zabbix.conf.php.j2
+    dest: /usr/share/zabbix/conf/zabbix.conf.php
+  tags:
+    - install-server
+    - install-server-configure
+
+- name: Restart services
+  systemd:
+    name: '{{ item }}'
+    state: restarted
+    enabled: yes
+  with_items:
+    - zabbix-server
+    - zabbix-agent
+    - apache2
+  tags:
+    - install-server
+    - install-server-configure
+
+- name: Reset Admin password for Zabbix Frontend
+  shell: |
+    CURRENT_PASS=$(/usr/bin/echo 'select passwd from users where userid=1;' | /usr/bin/mysql {{ dbname }} -BN )
+    NEW_PASS=$(/usr/bin/echo -n '{{ adminpass }}' | /usr/bin/md5sum | /usr/bin/awk '{ print $1 }')
+    echo "${CURRENT_PASS}" | /usr/bin/grep -q "${NEW_PASS}"
+    if [ $? -eq 0 ]
+    then
+      /usr/bin/echo "PASSWORD NOT CHANGED"
+    else
+      echo "update users set passwd='${NEW_PASS}' where userid=1;" | /usr/bin/mysql {{ dbname }} -BN
+      /usr/bin/echo "PASSWORD CHANGED"
+    fi
+  register: cmdresult
+  changed_when: cmdresult.stdout is search('PASSWORD CHANGED')
+  when: adminpass is defined

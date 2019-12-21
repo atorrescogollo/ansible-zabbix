@@ -1,2 +1,14 @@
 ---
 # tasks file for ansible-role-zabbix
+#
+
+- name: Validate params
+  assert:
+    that:
+      - action in role_actions
+  tags:
+    - always
+
+- include_tasks: '{{ action }}.yml'
+  tags:
+    - always
