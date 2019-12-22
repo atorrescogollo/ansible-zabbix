@@ -3,6 +3,10 @@ Role Name
 
 Zabbix environment manager to easy deploy instances.
 
+- Github repository: https://github.com/atorrescogollo/ansible-zabbix
+
+- Ansible-Galaxy link: https://galaxy.ansible.com/atorrescogollo/ansible_zabbix
+
 Requirements
 ------------
 
@@ -51,8 +55,5 @@ MIT
 
 Author Information
 ------------------
-
-Github repository: https://github.com/atorrescogollo/ansible-zabbix
-
-Ansible-Galaxy link: https://galaxy.ansible.com/atorrescogollo/ansible_zabbix
+This role was created in 2020 by Álvaro Torres Cogollo.
 
