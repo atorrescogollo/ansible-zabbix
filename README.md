@@ -1,38 +1,58 @@
 Role Name
 =========
 
-A brief description of the role goes here.
+Zabbix environment manager to easy deploy instances.
 
 Requirements
 ------------
 
-Any pre-requisites that may not be covered by Ansible itself or the role should be mentioned here. For instance, if the role uses the EC2 module, it may be a good idea to mention in this section that the boto package is required.
+This role has been tested on Debian 10 machines.
+
+Installation:
+```bash
+$ ansible-galaxy install atorrescogollo.ansible_zabbix
+```
 
 Role Variables
 --------------
 
-A description of the settable variables for this role should go here, including any variables that are in defaults/main.yml, vars/main.yml, and any variables that can/should be set via parameters to the role. Any variables that are read from other roles and/or the global scope (ie. hostvars, group vars, etc.) should be mentioned here as well.
+- `action`: Action to be executed. Posible values:
+  - install-server: Zabbix server installation
+
+- `dbname`, `dbuser`, `dbpass`: database name and credentials. Default=zabbix
+- `adminpass`: Password for Admin user in Zabbix Frontend. Default=zabbix
+- `timezone`: Timezone for PHP. Default=Europe/Madrid
+
+More variables available in defaults/main.yml
+
+NOTE: credentials can be loaded from vars/credentials.yml (i.e. ansible-vault).
 
 Dependencies
 ------------
 
-A list of other roles hosted on Galaxy should go here, plus any details in regards to parameters that may need to be set for other roles, or variables that are used from other roles.
+No dependencies
 
 Example Playbook
 ----------------
-
-Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
-
-    - hosts: servers
-      roles:
-         - { role: username.rolename, x: 42 }
+```yml
+- name: Install Zabbix Server
+  hosts: zabbix-servers
+  become: yes
+  roles:
+   - role: atorrescogollo.ansible_zabbix
+     vars:
+       action: install-server
+```
 
 License
 -------
 
-BSD
+MIT
 
 Author Information
 ------------------
 
-An optional section for the role authors to include contact information, or a website (HTML is not allowed).
+Github repository: https://github.com/atorrescogollo/ansible-zabbix
+
+Ansible-Galaxy link: https://galaxy.ansible.com/atorrescogollo/ansible_zabbix
+
