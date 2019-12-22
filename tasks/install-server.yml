@@ -23,7 +23,8 @@
     - install-server
     - install-server-install
 
-- include_vars: credentials.yml
+- name: Include credentials file if exists
+  include_vars: credentials.yml
   ignore_errors: yes
 
 - name: Create database
