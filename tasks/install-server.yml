@@ -26,6 +26,8 @@
 - name: Include credentials file if exists
   include_vars: credentials.yml
   ignore_errors: yes
+  tags:
+    - always
 
 - name: Create database
   mysql_db:
@@ -62,14 +64,16 @@
 - name: Configure Zabbix Server
   lineinfile:
     dest: "{{ item.configfile }}"
-    regexp: "^{{ item.param }}"
+    regexp: "^{{ item.param }}="
     insertafter: "^# {{ item.param }}=$"
     line: "{{ item.param }}={{ item.value }}"
+  notify:
+    - 'Restart {{ item.service }}'
   with_items:
-    - {configfile: "/etc/zabbix/zabbix_server.conf", param: "DBName", value: "{{ dbname }}"}
-    - {configfile: "/etc/zabbix/zabbix_server.conf", param: "DBUser", value: "{{ dbuser }}"}
-    - {configfile: "/etc/zabbix/zabbix_server.conf", param: "DBPassword", value: "{{ dbpass }}"}
-    - {configfile: "/etc/zabbix/zabbix_agentd.conf", param: "Hostname", value: "{{ inventory_hostname }}"}
+    - {configfile: "/etc/zabbix/zabbix_server.conf", param: "DBName", value: "{{ dbname }}", service: 'zabbix-server'}
+    - {configfile: "/etc/zabbix/zabbix_server.conf", param: "DBUser", value: "{{ dbuser }}", service: 'zabbix-server'}
+    - {configfile: "/etc/zabbix/zabbix_server.conf", param: "DBPassword", value: "{{ dbpass }}", service: 'zabbix-server'}
+    - {configfile: "/etc/zabbix/zabbix_agentd.conf", param: "Hostname", value: "{{ inventory_hostname }}", service: 'zabbix-agent'}
   tags:
     - install-server
     - install-server-configure
@@ -79,27 +83,68 @@
     path: /etc/zabbix/apache.conf
     regexp: '(#\s*)?php_value date.timezone .*$'
     replace: 'php_value date.timezone {{ timezone }}'
+  notify:
+    - Restart apache2
   tags:
     - install-server
     - install-server-configure
+
+- name: Enable Apache2 SSL
+  shell: |
+    /usr/sbin/a2enmod ssl
+    /usr/sbin/a2ensite default-ssl
+  register: cmdresult
+  changed_when: cmdresult.stdout is search('Enabling module ssl.') or cmdresult.stdout is search('Enabling site default-ssl.')
+  when: enablessl
+  notify:
+    - Restart apache2
+  tags:
+    - install-server
+    - install-server-configure
+
+- name: Enable HTTP to HTTPS | rewrite module
+  shell: |
+    /usr/sbin/a2enmod rewrite
+  register: cmdresult
+  changed_when: cmdresult.stdout is search('Enabling module rewrite.')
+  notify:
+    - Restart apache2
+  when: enablessl
+  tags:
+    - install-server
+    - install-server-configure
+
+- name: Enable HTTP to HTTPS | rewrite condition
+  blockinfile:
+    dest: /etc/apache2/sites-enabled/000-default.conf
+    insertafter: '<VirtualHost.*80>'
+    block: |
+          <IfModule mod_rewrite.c>
+            RewriteEngine On
+            RewriteCond %{HTTPS} off
+            RewriteRule /(.*) https://%{SERVER_NAME}/$1 [R,L]
+          </IfModule>
+  when: enablessl
+  notify:
+    - Restart apache2
+  tags:
+    - install-server
+    - install-server-configure
+
+- name: Redirect / to /zabbix/
+  lineinfile:
+    dest: /etc/apache2/sites-enabled/default-ssl.conf
+    regexp: 'RedirectMatch \^/\$ '
+    insertafter: '<VirtualHost .*443>'
+    line: RedirectMatch ^/$ /zabbix/
+  when: redirectalias
+  notify:
+    - Restart apache2
 
 - name: Configure Zabbix Frontend
   template:
     src: zabbix.conf.php.j2
     dest: /usr/share/zabbix/conf/zabbix.conf.php
-  tags:
-    - install-server
-    - install-server-configure
-
-- name: Restart services
-  systemd:
-    name: '{{ item }}'
-    state: restarted
-    enabled: yes
-  with_items:
-    - zabbix-server
-    - zabbix-agent
-    - apache2
   tags:
     - install-server
     - install-server-configure
@@ -119,3 +164,7 @@
   register: cmdresult
   changed_when: cmdresult.stdout is search('PASSWORD CHANGED')
   when: adminpass is defined
+  tags:
+    - install-server
+    - install-server-configure
+

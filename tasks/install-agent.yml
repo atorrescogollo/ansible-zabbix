@@ -1,0 +1,32 @@
+#
+# Zabbix Agent Installation
+#
+
+- name: 'Install deb from {{ zabbix_deb_url }}'
+  apt:
+    deb: "{{ zabbix_deb_url }}"
+  tags:
+    - install-agent
+    - install-agent-install
+
+- name: Install Zabbix Agent package
+  apt:
+    pkg:
+      - zabbix-agent
+    update_cache: yes
+  tags:
+    - install-agent
+    - install-agent-install
+
+- name: Configure Zabbix Agent
+  lineinfile:
+    dest: "{{ item.configfile }}"
+    regexp: "^{{ item.param }}="
+    insertafter: "^# {{ item.param }}=$"
+    line: "{{ item.param }}={{ item.value }}"
+  notify:
+    - Restart zabbix-agent
+  with_items:
+    - {configfile: "/etc/zabbix/zabbix_agentd.conf", param: "Server", value: "{{ groups['zabbix-servers'] | map('extract', hostvars, ['inventory_hostname']) | join(',') }}"}
+    - {configfile: "/etc/zabbix/zabbix_agentd.conf", param: "Hostname", value: "{{ inventory_hostname }}"}
+
