@@ -149,20 +149,28 @@
     - install-server
     - install-server-configure
 
-- name: Reset Admin password for Zabbix Frontend
-  shell: |
-    CURRENT_PASS=$(/usr/bin/echo 'select passwd from users where userid=1;' | /usr/bin/mysql {{ dbname }} -BN )
-    NEW_PASS=$(/usr/bin/echo -n '{{ adminpass }}' | /usr/bin/md5sum | /usr/bin/awk '{ print $1 }')
-    echo "${CURRENT_PASS}" | /usr/bin/grep -q "${NEW_PASS}"
-    if [ $? -eq 0 ]
-    then
-      /usr/bin/echo "PASSWORD NOT CHANGED"
-    else
-      echo "update users set passwd='${NEW_PASS}' where userid=1;" | /usr/bin/mysql {{ dbname }} -BN
-      /usr/bin/echo "PASSWORD CHANGED"
-    fi
-  register: cmdresult
-  changed_when: cmdresult.stdout is search('PASSWORD CHANGED')
+- name: Reset Admin Password
+  set_fact:
+    useralias: Admin
+    newpass: "{{ adminpass }}"
+    apipass: zabbix
+  when: adminpass is defined
+  tags:
+    - install-server
+    - install-server-configure
+
+- meta: flush_handlers
+
+- include_tasks: 'change-user-passwd.yml'
+  when: adminpass is defined
+  tags:
+    - install-server
+    - install-server-configure
+
+- name: Update Admin Credentials for API access
+  set_fact:
+    apiuser: Admin
+    apipass: "{{ adminpass }}"
   when: adminpass is defined
   tags:
     - install-server

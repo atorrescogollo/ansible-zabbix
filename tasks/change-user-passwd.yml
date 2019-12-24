@@ -1,0 +1,41 @@
+---
+- name: Include credentials file if exists
+  include_vars: credentials.yml
+  ignore_errors: yes
+  tags:
+    - always
+
+- name: Validate API action
+  assert:
+    that:
+      - useralias is defined
+      - newpass is defined
+  tags:
+    - always
+
+- name: Set API action variables
+  set_fact:
+    apiuser: '{{ apiuser | default("Admin") }}'
+    apipass: '{{ apipass | default(adminpass) | default("zabbix") }}'
+    api_action:
+      description: 'Get User "{{ useralias }}"'
+      method: 'user.get'
+      params:
+        filter:
+          alias: '{{ useralias }}'
+        limit: 1
+
+- include_tasks: 'api.yml'
+
+- name: 'Change password for "{{ useralias }}"'
+  set_fact:
+    api_action:
+      userid: '{{ apiresult.json.result[0].userid }}'
+      description: 'Change password for userid={{ apiresult.json.result[0].userid }}'
+      method: 'user.update'
+      params:
+        userid: '{{ apiresult.json.result[0].userid }}'
+        passwd: '{{ newpass }}'
+
+- include_tasks: 'api.yml'
+  failed_when: apiresult.json.result[0].userid != userid

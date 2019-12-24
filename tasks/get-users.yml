@@ -17,6 +17,6 @@
 
 - include_tasks: 'api.yml'
 
-- name: API Response
+- name: 'API Response'
   debug:
-    var: apiresult.json.result
+    var: apiresult.json

@@ -1,9 +1,7 @@
 - name: Identify API server
   set_fact:
-    apiserver: "{{ item }}"
+    apiserver: "{{ groups['zabbix-servers'] | map('extract', hostvars, ['ansible_host']) | first }}"
   when: apiserver is not defined
-  with_items:
-    - "{{ groups['zabbix-servers'] | map('extract', hostvars, ['ansible_host']) | join('\n') }}"
 
 - name: API login
   uri:
@@ -34,7 +32,8 @@
           id: "{{ apiauthresult.json.id }}"
           auth: "{{ apiauthresult.json.result }}"
       register: apiresult
-      failed_when: apiresult.json.result is defined and not apiresult.json.result
+      changed_when: apiresult.json.result is defined and apiresult.json.result
+      failed_when: apiresult.json.result is not defined or not apiresult.json.result
   always:
     - name: API logout
       uri:
