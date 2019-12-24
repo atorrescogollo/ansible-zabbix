@@ -1,0 +1,22 @@
+---
+- name: Include credentials file if exists
+  include_vars: credentials.yml
+  ignore_errors: yes
+  tags:
+    - always
+
+- name: Set API action variables
+  set_fact:
+    apiuser: '{{ apiuser | default("Admin") }}'
+    apipass: '{{ apipass | default(adminpass) | default("zabbix") }}'
+    api_action:
+      description: 'Get all users'
+      method: 'user.get'
+      params:
+        output: 'extend'
+
+- include_tasks: 'api.yml'
+
+- name: API Response
+  debug:
+    var: apiresult.json.result

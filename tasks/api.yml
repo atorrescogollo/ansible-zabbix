@@ -1,0 +1,51 @@
+- name: Identify API server
+  set_fact:
+    apiserver: "{{ item }}"
+  when: apiserver is not defined
+  with_items:
+    - "{{ groups['zabbix-servers'] | map('extract', hostvars, ['ansible_host']) | join('\n') }}"
+
+- name: API login
+  uri:
+    url: "https://{{ apiserver }}/zabbix/api_jsonrpc.php"
+    body_format: json
+    validate_certs: no
+    body:
+      jsonrpc: "2.0"
+      method: 'user.login'
+      params:
+        user: '{{ apiuser }}'
+        password: '{{ apipass }}'
+      id: 1
+  register: apiauthresult
+  failed_when: apiauthresult.json.error is defined
+
+- name: Make API Requests
+  block:
+    - name: "API | {{ api_action.description | default('Process API requests') }}"
+      uri:
+        url: "https://{{ apiserver }}/zabbix/api_jsonrpc.php"
+        body_format: json
+        validate_certs: no
+        body:
+          jsonrpc: "2.0"
+          method: '{{ api_action.method }}'
+          params: '{{ api_action.params }}'
+          id: "{{ apiauthresult.json.id }}"
+          auth: "{{ apiauthresult.json.result }}"
+      register: apiresult
+      failed_when: apiresult.json.result is defined and not apiresult.json.result
+  always:
+    - name: API logout
+      uri:
+        url: "https://{{ apiserver }}/zabbix/api_jsonrpc.php"
+        body_format: json
+        validate_certs: no
+        body:
+          jsonrpc: "2.0"
+          method: 'user.logout'
+          params: []
+          id: 1
+          auth: "{{ apiauthresult.json.result }}"
+      register: apiauthresult
+      failed_when: apiauthresult.json.result is defined and not apiauthresult.json.result

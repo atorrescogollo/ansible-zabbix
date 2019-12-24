@@ -29,4 +29,3 @@
   with_items:
     - {configfile: "/etc/zabbix/zabbix_agentd.conf", param: "Server", value: "{{ groups['zabbix-servers'] | map('extract', hostvars, ['inventory_hostname']) | join(',') }}"}
     - {configfile: "/etc/zabbix/zabbix_agentd.conf", param: "Hostname", value: "{{ inventory_hostname }}"}
-
