@@ -98,35 +98,26 @@
     - install-server-configure
     - install-server-configure-apache2
 
-
-- name: Enable Apache2 SSL
-  shell: |
-    /usr/sbin/a2enmod ssl
-    /usr/sbin/a2ensite default-ssl
+- name: Enable Apache2 stuff
+  command: |
+    {{ item.exec }} {{ item.name }}
   register: cmdresult
-  changed_when: cmdresult.stdout is search('Enabling module ssl.') or cmdresult.stdout is search('Enabling site default-ssl.')
+  changed_when: cmdresult.stdout is search('Enabling')
   when: enablessl
   notify:
     - Restart apache2
+  with_items:
+    - {exec: /usr/sbin/a2enmod, type: module, name: ssl}
+    - {exec: /usr/sbin/a2ensite, type: site, name: default-ssl}
+    - {exec: /usr/sbin/a2enmod, type: module, name: rewrite}
+  loop_control:
+    label: "'{{ item.name }}' {{ item.type }}"
   tags:
     - install-server
     - install-server-configure
     - install-server-configure-apache2
 
-- name: Enable HTTP to HTTPS | rewrite module
-  shell: |
-    /usr/sbin/a2enmod rewrite
-  register: cmdresult
-  changed_when: cmdresult.stdout is search('Enabling module rewrite.')
-  notify:
-    - Restart apache2
-  when: enablessl
-  tags:
-    - install-server
-    - install-server-configure
-    - install-server-configure-apache2
-
-- name: Enable HTTP to HTTPS | rewrite condition
+- name: Enable HTTP to HTTPS redirection
   blockinfile:
     dest: /etc/apache2/sites-enabled/000-default.conf
     insertafter: '<VirtualHost.*80>'
