@@ -1,5 +1,8 @@
 ---
 # defaults file for ansible-role-zabbix
+servers_group_name: 'zabbix_servers'
+agents_group_name: 'zabbix_agents'
+
 role_actions:
   - install-server
   - install-agent

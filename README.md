@@ -30,6 +30,9 @@ Role Variables
 More variables available in defaults/main.yml
 
 NOTE: credentials can be loaded from vars/credentials.yml (i.e. ansible-vault).
+NOTE: For autoconfiguration porpuses, zabbix servers and zabbix agents groups must be named
+      'zabbix_servers' and 'zabbix_agents', respectively. Alternatively, you can override
+      vars 'servers_group_name' and 'agents_group_name' to change group names.
 
 Dependencies
 ------------
@@ -40,7 +43,7 @@ Example Playbook
 ----------------
 ```yml
 - name: Install Zabbix Server
-  hosts: zabbix-servers
+  hosts: zabbix_servers
   become: yes
   roles:
    - role: atorrescogollo.ansible_zabbix

@@ -13,29 +13,87 @@
   tags:
     - always
 
-- name: Set API action variables
+- name: API | Select API server
   set_fact:
-    apiuser: '{{ apiuser | default("Admin") }}'
-    apipass: '{{ apipass | default(adminpass) | default("zabbix") }}'
-    api_action:
-      description: 'Get User "{{ useralias }}"'
-      method: 'user.get'
+    apiserver: "{{ groups[servers_group_name] | map('extract', hostvars, ['ansible_host']) | first }}"
+  when: apiserver is not defined
+  tags:
+    - api
+    - api-login
+
+- name: API | Login
+  uri:
+    url: "https://{{ apiserver }}/zabbix/api_jsonrpc.php"
+    body_format: json
+    validate_certs: no
+    body:
+      jsonrpc: "2.0"
+      method: 'user.login'
       params:
-        filter:
-          alias: '{{ useralias }}'
-        limit: 1
+        user: '{{ apiuser | default("Admin") }}'
+        password: '{{ apipass | default(adminpass) | default("zabbix") }}'
+      id: 1
+  register: apiauthresult
+  failed_when: apiauthresult.failed or apiauthresult.json.error is defined
+  tags:
+    - api
+    - api-login
 
-- include_tasks: 'api.yml'
 
-- name: 'Change password for "{{ useralias }}"'
-  set_fact:
-    api_action:
-      userid: '{{ apiresult.json.result[0].userid }}'
-      description: 'Change password for userid={{ apiresult.json.result[0].userid }}'
-      method: 'user.update'
-      params:
-        userid: '{{ apiresult.json.result[0].userid }}'
-        passwd: '{{ newpass }}'
+- block:
+    - name: 'API | Get user "{{ useralias }}"'
+      uri:
+        url: "https://{{ apiserver }}/zabbix/api_jsonrpc.php"
+        body_format: json
+        validate_certs: no
+        body:
+          jsonrpc: "2.0"
+          method: 'user.get'
+          params:
+            filter:
+              alias: '{{ useralias }}'
+            limit: 1
+          id: "{{ apiauthresult.json.id }}"
+          auth: "{{ apiauthresult.json.result }}"
+      register: apiresult
+      failed_when: apiresult.failed or apiresult.json.error is defined
+      tags:
+        - api
+        - api-getuser
 
-- include_tasks: 'api.yml'
-  failed_when: apiresult.json.result[0].userid != userid
+    - name: 'API | Change password for "{{ useralias }}"'
+      uri:
+        url: "https://{{ apiserver }}/zabbix/api_jsonrpc.php"
+        body_format: json
+        validate_certs: no
+        body:
+          jsonrpc: "2.0"
+          method: 'user.update'
+          params:
+            userid: '{{ apiresult.json.result[0].userid }}'
+            passwd: '{{ newpass }}'
+          id: "{{ apiauthresult.json.id }}"
+          auth: "{{ apiauthresult.json.result }}"
+      register: apiresult
+      failed_when: apiresult.failed or apiresult.json.error is defined
+      tags:
+        - api
+        - api-changeuserpasswd
+
+  always:
+    - name: API | Logout
+      uri:
+        url: "https://{{ apiserver }}/zabbix/api_jsonrpc.php"
+        body_format: json
+        validate_certs: no
+        body:
+          jsonrpc: "2.0"
+          method: 'user.logout'
+          params: []
+          id: 1
+          auth: "{{ apiauthresult.json.result }}"
+      register: apiauthresult
+      failed_when: apiauthresult.failed or apiauthresult.json.error is defined
+      tags:
+        - api
+        - api-logout

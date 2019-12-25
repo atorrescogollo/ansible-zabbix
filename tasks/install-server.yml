@@ -8,6 +8,7 @@
   tags:
     - install-server
     - install-server-install
+    - install-server-install-packages
 
 - name: Install Zabbix Server packages
   apt:
@@ -22,6 +23,7 @@
   tags:
     - install-server
     - install-server-install
+    - install-server-install-packages
 
 - name: Include credentials file if exists
   include_vars: credentials.yml
@@ -39,6 +41,7 @@
   tags:
     - install-server
     - install-server-install
+    - install-server-install-database
 
 - name: Create dbuser and grant privileges
   mysql_user:
@@ -50,6 +53,7 @@
   tags:
     - install-server
     - install-server-install
+    - install-server-install-database
 
 - name: Import database skeleton
   mysql_db:
@@ -60,6 +64,7 @@
   tags:
     - install-server
     - install-server-install
+    - install-server-install-database
 
 - name: Configure Zabbix Server
   lineinfile:
@@ -74,9 +79,12 @@
     - {configfile: "/etc/zabbix/zabbix_server.conf", param: "DBUser", value: "{{ dbuser }}", service: 'zabbix-server'}
     - {configfile: "/etc/zabbix/zabbix_server.conf", param: "DBPassword", value: "{{ dbpass }}", service: 'zabbix-server'}
     - {configfile: "/etc/zabbix/zabbix_agentd.conf", param: "Hostname", value: "{{ inventory_hostname }}", service: 'zabbix-agent'}
+  loop_control:
+    label: '{{ item.service }}: {{ item.param }}'
   tags:
     - install-server
     - install-server-configure
+    - install-server-configure-zabbix
 
 - name: Set php timezone
   replace:
@@ -88,6 +96,8 @@
   tags:
     - install-server
     - install-server-configure
+    - install-server-configure-apache2
+
 
 - name: Enable Apache2 SSL
   shell: |
@@ -101,6 +111,7 @@
   tags:
     - install-server
     - install-server-configure
+    - install-server-configure-apache2
 
 - name: Enable HTTP to HTTPS | rewrite module
   shell: |
@@ -113,6 +124,7 @@
   tags:
     - install-server
     - install-server-configure
+    - install-server-configure-apache2
 
 - name: Enable HTTP to HTTPS | rewrite condition
   blockinfile:
@@ -130,6 +142,7 @@
   tags:
     - install-server
     - install-server-configure
+    - install-server-configure-apache2
 
 - name: Redirect / to /zabbix/
   lineinfile:
@@ -140,6 +153,10 @@
   when: redirectalias
   notify:
     - Restart apache2
+  tags:
+    - install-server
+    - install-server-configure
+    - install-server-configure-apache2
 
 - name: Configure Zabbix Frontend
   template:
@@ -148,26 +165,40 @@
   tags:
     - install-server
     - install-server-configure
+    - install-server-configure-frontend
 
-- name: Reset Admin Password
+- meta: flush_handlers
+  tags:
+    - always
+
+- name: Set Admin Password Reset Vars
   set_fact:
     useralias: Admin
     newpass: "{{ adminpass }}"
-    apipass: zabbix
+    apipass: "{{ apipass | default('zabbix' if (db_created is defined and db_created.changed) else adminpass) }}"
   when: adminpass is defined
   tags:
     - install-server
     - install-server-configure
+    - install-server-configure-management
+    - install-server-configure-changeadminpasswd
 
-- meta: flush_handlers
-
-- include_tasks: 'change-user-passwd.yml'
+- include_tasks:
+    file: 'change-user-passwd.yml'
+    apply:
+      tags:
+        - install-server
+        - install-server-configure
+        - install-server-configure-management
+        - install-server-configure-changeadminpasswd
   when: adminpass is defined
   tags:
     - install-server
     - install-server-configure
+    - install-server-configure-management
+    - install-server-configure-changeadminpasswd
 
-- name: Update Admin Credentials for API access
+- name: Update API Management Credentials
   set_fact:
     apiuser: Admin
     apipass: "{{ adminpass }}"
@@ -175,3 +206,4 @@
   tags:
     - install-server
     - install-server-configure
+    - install-server-configure-management

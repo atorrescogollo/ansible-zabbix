@@ -27,5 +27,9 @@
   notify:
     - Restart zabbix-agent
   with_items:
-    - {configfile: "/etc/zabbix/zabbix_agentd.conf", param: "Server", value: "{{ groups['zabbix-servers'] | map('extract', hostvars, ['inventory_hostname']) | join(',') }}"}
+    - configfile: "/etc/zabbix/zabbix_agentd.conf"
+      param: "Server"
+      value: "{{ groups[servers_group_name] | map('extract', hostvars, ['inventory_hostname']) | join(',') }}"
     - {configfile: "/etc/zabbix/zabbix_agentd.conf", param: "Hostname", value: "{{ inventory_hostname }}"}
+  loop_control:
+    label: 'zabbix-agent: {{ item.param }}'

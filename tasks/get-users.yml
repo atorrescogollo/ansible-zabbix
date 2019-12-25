@@ -5,18 +5,69 @@
   tags:
     - always
 
-- name: Set API action variables
+- name: API | Select API server
   set_fact:
-    apiuser: '{{ apiuser | default("Admin") }}'
-    apipass: '{{ apipass | default(adminpass) | default("zabbix") }}'
-    api_action:
-      description: 'Get all users'
-      method: 'user.get'
+    apiserver: "{{ groups[servers_group_name] | map('extract', hostvars, ['ansible_host']) | first }}"
+  when: apiserver is not defined
+  tags:
+    - api
+    - api-login
+
+- name: API | Login
+  uri:
+    url: "https://{{ apiserver }}/zabbix/api_jsonrpc.php"
+    body_format: json
+    validate_certs: no
+    body:
+      jsonrpc: "2.0"
+      method: 'user.login'
       params:
-        output: 'extend'
+        user: '{{ apiuser | default("Admin") }}'
+        password: '{{ apipass | default(adminpass) | default("zabbix") }}'
+      id: 1
+  register: apiauthresult
+  failed_when: apiauthresult.failed or apiauthresult.json.error is defined
+  tags:
+    - api
+    - api-login
 
-- include_tasks: 'api.yml'
+- block:
+    - name: 'API | Get all users'
+      uri:
+        url: "https://{{ apiserver }}/zabbix/api_jsonrpc.php"
+        body_format: json
+        validate_certs: no
+        body:
+          jsonrpc: "2.0"
+          method: 'user.get'
+          params:
+            output: extend
+          id: "{{ apiauthresult.json.id }}"
+          auth: "{{ apiauthresult.json.result }}"
+      register: apiresult
+      failed_when: apiresult.failed or apiresult.json.error is defined
+      tags:
+        - api
+        - api-getusers
 
-- name: 'API Response'
+  always:
+    - name: API | Logout
+      uri:
+        url: "https://{{ apiserver }}/zabbix/api_jsonrpc.php"
+        body_format: json
+        validate_certs: no
+        body:
+          jsonrpc: "2.0"
+          method: 'user.logout'
+          params: []
+          id: 1
+          auth: "{{ apiauthresult.json.result }}"
+      register: apiauthresult
+      failed_when: apiauthresult.failed or apiauthresult.json.error is defined
+      tags:
+        - api
+        - api-logout
+
+- name: 'API | User List'
   debug:
     var: apiresult.json
